@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// ENUMS (Strict lists of allowed values to prevent typos)
+// ------------------------------------------------------
+enum Role {
+  BUYER
+  VENDOR
+}
+
+enum AssemblyStatus {
+  DRAFT
+  BIDDING_OPEN
+  AWARDED
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+// ------------------------------------------------------
+// MODELS (The actual database tables)
+// ------------------------------------------------------
+
+model User {
+  id        String   @id @default(uuid()) // Matches Supabase Auth ID
+  email     String   @unique
+  name      String?
+  city      String?
+  pincode   String?
+  role      Role?    
+  createdAt DateTime @default(now())
+
+  // A Vendor can submit many bids.
+  bids       Bid[]      
+}
+
+model Assembly {
+  id          String         @id @default(uuid())
+  name        String         // e.g., "V8 Engine Block"
+  description String?
+  modelUrl    String         // URL to the 3D .glb file stored in Supabase
+  status      AssemblyStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  // An assembly is made of many parts
+  parts       Part[]
+}
+
+model Part {
+  id             String   @id @default(uuid())
+  name           String   // e.g., "Titanium Gear"
+  
+  // This matches the exact name of the node inside the 3D file.
+  // This is how clicking the 3D model knows which database row to look up!
+  meshId         String   
+  
+  quantityNeeded Int      @default(1)
+  material       String?
+
+  // Which assembly does this part belong to?
+  assemblyId     String
+  assembly       Assembly @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+
+  // One part can receive many bids from different vendors
+  bids           Bid[]
+}
+
+model Bid {
+  id           String    @id @default(uuid())
+  pricePerUnit Float     // The core data point: how much?
+  leadTimeDays Int       // Secondary data point: how fast?
+  status       BidStatus @default(PENDING)
+  createdAt    DateTime  @default(now())
+
+  // Who made this bid?
+  vendorId     String
+  vendor       User      @relation(fields: [vendorId], references: [id])
+
+  // Which part is this bid for?
+  partId       String
+  part         Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
+}
